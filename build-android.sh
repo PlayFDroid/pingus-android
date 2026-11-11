@@ -171,10 +171,14 @@ GLM_INC="/usr/include"
 if [ ! -d "${GLM_INC}/glm" ]; then
   if [ -d "/usr/local/include/glm" ]; then
     GLM_INC="/usr/local/include"
+  elif [ -d "${DEPS_DIR}/glm/glm" ]; then
+    GLM_INC="${DEPS_DIR}/glm"
   else
-    echo "error: GLM headers not found in /usr/include/glm or /usr/local/include/glm." >&2
-    echo "       Please install libglm-dev (e.g. sudo apt install libglm-dev)" >&2
-    exit 1
+    echo "==> Downloading GLM headers..."
+    mkdir -p "${DEPS_DIR}/glm"
+    curl -L -o "${DEPS_DIR}/glm.tar.gz" "https://github.com/g-truc/glm/archive/refs/tags/1.0.1.tar.gz"
+    tar -xzf "${DEPS_DIR}/glm.tar.gz" -C "${DEPS_DIR}/glm" --strip-components=1
+    GLM_INC="${DEPS_DIR}/glm"
   fi
 fi
 
