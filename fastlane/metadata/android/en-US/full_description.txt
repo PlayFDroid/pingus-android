@@ -1,0 +1,12 @@
+Pingus is a free and open-source Lemmings-style puzzle game featuring cute penguins.
+
+Command groups of marching penguins through intricate obstacle courses by assigning individual skills such as Digging, Bridging, Climbing, Floating, Bashing, and Mining to ensure safe arrival at the exit!
+
+Features of this modernized Android edition:
+• Complete classic campaign with dozens of tutorial, holiday, and challenging levels across varied seasons and biomes.
+• Touch-optimized gameplay: tap empty areas to smoothly scroll/pan around levels, and tap penguins directly to assign actions.
+• Mobile UI Auto-Scaling: seamlessly adapts interface, text, and level elements to modern high-DPI smartphone and tablet screens (with selectable scale in the Options menu).
+• Full integrated audio: authentic sound effects and tracker module music powered by OpenAL Soft and libmodplug.
+• Modernized toolchain targeting Android 15/16+ (SDK 35) with 16 KB page-size kernel alignment and native 64-bit performance (arm64-v8a and x86_64).
+• In-game Level Editor and mod levelsets support.
+• 100% free and open-source under GPL-3.0+, with zero ads or tracking.

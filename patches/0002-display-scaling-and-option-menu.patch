@@ -1,0 +1,711 @@
+diff --git a/src/engine/display/display.cpp b/src/engine/display/display.cpp
+index 69dcefc..18faaff 100644
+--- a/src/engine/display/display.cpp
++++ b/src/engine/display/display.cpp
+@@ -34,6 +34,7 @@
+ namespace pingus {
+ 
+ std::unique_ptr<Framebuffer> Display::s_framebuffer;
++float Display::s_scale = 1.0f;
+ 
+ void
+ Display::flip_display()
+@@ -53,12 +54,74 @@ Display::get_height()
+   return s_framebuffer ? s_framebuffer->get_size().height() : 0;
+ }
+ 
++int
++Display::get_physical_width()
++{
++  return s_framebuffer ? s_framebuffer->get_physical_width() : get_width();
++}
++
++int
++Display::get_physical_height()
++{
++  return s_framebuffer ? s_framebuffer->get_physical_height() : get_height();
++}
++
++float
++Display::calc_auto_scale()
++{
++  int h = get_physical_height();
++#ifdef ANDROID
++  if (h >= 1800)
++    return 3.0f;
++  else if (h >= 900)
++    return 2.0f;
++  else if (h >= 700)
++    return 1.5f;
++  else
++    return 1.0f;
++#else
++  if (h >= 1800)
++    return 2.0f;
++  return 1.0f;
++#endif
++}
++
++void
++Display::set_scale(float scale)
++{
++  if (scale <= 0.0f)
++    scale = calc_auto_scale();
++  s_scale = scale;
++  if (s_framebuffer)
++  {
++    s_framebuffer->set_scale(scale);
++    if (ScreenManager::instance())
++      ScreenManager::instance()->resize(s_framebuffer->get_size());
++  }
++}
++
+ geom::isize
+ Display::get_size()
+ {
+   return s_framebuffer ? s_framebuffer->get_size() : geom::isize(0, 0);
+ }
+ 
++geom::fpoint
++Display::screen_to_logical(geom::fpoint const& screen_pos)
++{
++  if (s_scale <= 0.0f || s_scale == 1.0f)
++    return screen_pos;
++  return geom::fpoint(screen_pos.x() / s_scale, screen_pos.y() / s_scale);
++}
++
++geom::fpoint
++Display::screen_to_logical_delta(geom::fpoint const& delta)
++{
++  if (s_scale <= 0.0f || s_scale == 1.0f)
++    return delta;
++  return geom::fpoint(delta.x() / s_scale, delta.y() / s_scale);
++}
++
+ void
+ Display::resize(geom::isize const& size_)
+ {
+@@ -69,7 +132,7 @@ Display::resize(geom::isize const& size_)
+   Display::set_video_mode(size, is_fullscreen(), true);
+ 
+   if (ScreenManager::instance())
+-    ScreenManager::instance()->resize(size);
++    ScreenManager::instance()->resize(s_framebuffer ? s_framebuffer->get_size() : size);
+ }
+ 
+ bool
+diff --git a/src/engine/display/display.hpp b/src/engine/display/display.hpp
+index a43eaac..b6b09c8 100644
+--- a/src/engine/display/display.hpp
++++ b/src/engine/display/display.hpp
+@@ -23,6 +23,7 @@
+ 
+ #include <geom/rect.hpp>
+ #include <geom/size.hpp>
++#include <geom/point.hpp>
+ 
+ #include "engine/display/framebuffer_type.hpp"
+ 
+@@ -43,6 +44,16 @@ public:
+   static int  get_height();
+   static geom::isize get_size();
+ 
++  static int  get_physical_width();
++  static int  get_physical_height();
++  static float calc_auto_scale();
++
++  static float s_scale;
++  static float get_scale() { return s_scale; }
++  static void set_scale(float scale);
++  static geom::fpoint screen_to_logical(geom::fpoint const& screen_pos);
++  static geom::fpoint screen_to_logical_delta(geom::fpoint const& delta);
++
+   /** @return true on success (does not throw on video-mode failure). */
+   static bool create_window(FramebufferType framebuffer_type, geom::isize const& size, bool fullscreen, bool resizable);
+   static void set_video_mode(geom::isize const& size, bool fullscreen, bool resizable);
+diff --git a/src/engine/display/framebuffer.hpp b/src/engine/display/framebuffer.hpp
+index 8804ce6..dc23a3a 100644
+--- a/src/engine/display/framebuffer.hpp
++++ b/src/engine/display/framebuffer.hpp
+@@ -76,6 +76,10 @@ public:
+   virtual void fill_rect(geom::irect const& rect, Color const& color) =0;
+ 
+   virtual geom::isize get_size() const =0;
++
++  virtual int get_physical_width() const { return get_size().width(); }
++  virtual int get_physical_height() const { return get_size().height(); }
++  virtual void set_scale(float /* scale */) {}
+ };
+ 
+ } // namespace pingus
+diff --git a/src/engine/display/opengl/opengl_framebuffer.cpp b/src/engine/display/opengl/opengl_framebuffer.cpp
+index 307f93f..5d5334d 100644
+--- a/src/engine/display/opengl/opengl_framebuffer.cpp
++++ b/src/engine/display/opengl/opengl_framebuffer.cpp
+@@ -19,7 +19,11 @@
+ 
+ #include "util/print.hpp"
+ 
++#ifdef ANDROID
++#include <android/log.h>
++#endif
+ #include "engine/display/opengl/opengl_framebuffer_surface_impl.hpp"
++#include "engine/display/display.hpp"
+ #include "math/color.hpp"
+ #include "util/pathname.hpp"
+ #include "util/raise_exception.hpp"
+@@ -50,6 +54,11 @@ OpenGLFramebuffer::OpenGLFramebuffer() :
+   m_mvp{},
+   m_width(0),
+   m_height(0),
++  m_physical_width(0),
++  m_physical_height(0),
++  m_logical_width(0),
++  m_logical_height(0),
++  m_scale(1.0f),
+ #if !PINGUS_GL_ES
+   m_vao(0),
+ #endif
+@@ -71,14 +80,56 @@ OpenGLFramebuffer::~OpenGLFramebuffer()
+     SDL_DestroyWindow(m_window);
+ }
+ 
++void
++OpenGLFramebuffer::set_scale(float scale)
++{
++  if (scale <= 0.0f)
++    scale = Display::calc_auto_scale();
++
++  m_scale = scale;
++  Display::s_scale = scale;
++
++  if (m_physical_width > 0 && m_physical_height > 0)
++  {
++    m_logical_width = static_cast<int>(std::round(static_cast<float>(m_physical_width) / scale));
++    m_logical_height = static_cast<int>(std::round(static_cast<float>(m_physical_height) / scale));
++
++    m_width = m_logical_width;
++    m_height = m_logical_height;
++
++    mat4_ortho(m_mvp, 0.0f, static_cast<float>(m_logical_width), static_cast<float>(m_logical_height), 0.0f, -1.0f, 1.0f);
++    glViewport(0, 0, m_physical_width, m_physical_height);
++  }
++}
++
+ void
+ OpenGLFramebuffer::set_ortho(int width, int height)
+ {
+-  m_width = width;
+-  m_height = height;
+-  // Top-left origin, y grows down (same as classic glOrtho(0,w,h,0,-1,1)).
+-  mat4_ortho(m_mvp, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, -1.0f, 1.0f);
+-  glViewport(0, 0, width, height);
++  m_physical_width = width;
++  m_physical_height = height;
++
++  float scale = Display::get_scale();
++  if (scale <= 0.0f)
++    scale = Display::calc_auto_scale();
++
++  char const* env_scale = std::getenv("PINGUS_SCALE");
++  if (env_scale && *env_scale)
++  {
++    float s = std::strtof(env_scale, nullptr);
++    if (s >= 0.5f && s <= 5.0f)
++      scale = s;
++  }
++
++  set_scale(scale);
++
++#ifdef ANDROID
++  __android_log_print(ANDROID_LOG_ERROR, "pingus",
++                      "set_ortho: physical=%dx%d scale=%.2f logical=%dx%d",
++                      width, height, m_scale, m_logical_width, m_logical_height);
++#endif
++
++  print_err("OpenGLFramebuffer: set_ortho physical={}x{} scale={} logical={}x{}",
++            width, height, m_scale, m_logical_width, m_logical_height);
+ }
+ 
+ void
+@@ -147,20 +198,21 @@ OpenGLFramebuffer::create_surface(Surface const& surface)
+ Surface
+ OpenGLFramebuffer::make_screenshot() const
+ {
+-  geom::isize size = get_size();
++  int w = m_physical_width > 0 ? m_physical_width : get_size().width();
++  int h = m_physical_height > 0 ? m_physical_height : get_size().height();
+   glPixelStorei(GL_PACK_ALIGNMENT, 1);
+-  std::unique_ptr<uint8_t[]> buffer(new uint8_t[static_cast<size_t>(size.width() * size.height() * 4)]);
+-  glReadPixels(0, 0, size.width(), size.height(), GL_RGBA, GL_UNSIGNED_BYTE, buffer.get());
++  std::unique_ptr<uint8_t[]> buffer(new uint8_t[static_cast<size_t>(w * h * 4)]);
++  glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, buffer.get());
+ 
+-  Surface screenshot(size.width(), size.height());
++  Surface screenshot(w, h);
+   uint8_t* op = screenshot.get_data();
+   size_t pitch = static_cast<size_t>(screenshot.get_pitch());
+-  for (size_t y = 0; y < static_cast<size_t>(size.height()); ++y)
++  for (size_t y = 0; y < static_cast<size_t>(h); ++y)
+   {
+-    size_t src_y = static_cast<size_t>(size.height()) - 1 - y; // flip
+-    for (size_t x = 0; x < static_cast<size_t>(size.width()); ++x)
++    size_t src_y = static_cast<size_t>(h) - 1 - y; // flip
++    for (size_t x = 0; x < static_cast<size_t>(w); ++x)
+     {
+-      size_t si = (src_y * static_cast<size_t>(size.width()) + x) * 4;
++      size_t si = (src_y * static_cast<size_t>(w) + x) * 4;
+       op[y * pitch + 4 * x + 0] = buffer[si + 0];
+       op[y * pitch + 4 * x + 1] = buffer[si + 1];
+       op[y * pitch + 4 * x + 2] = buffer[si + 2];
+@@ -525,10 +577,15 @@ OpenGLFramebuffer::push_cliprect(geom::irect const& rect)
+                                   std::min(cliprect_stack.back().bottom(), rect.bottom())));
+   }
+ 
+-  glScissor(cliprect_stack.back().left(),
+-            get_size().height() - cliprect_stack.back().bottom(),
+-            cliprect_stack.back().width(),
+-            cliprect_stack.back().height());
++  geom::irect const& cur = cliprect_stack.back();
++  float sx_factor = (m_logical_width > 0) ? (static_cast<float>(m_physical_width) / static_cast<float>(m_logical_width)) : 1.0f;
++  float sy_factor = (m_logical_height > 0) ? (static_cast<float>(m_physical_height) / static_cast<float>(m_logical_height)) : 1.0f;
++  int sx = static_cast<int>(std::round(cur.left() * sx_factor));
++  int sy = static_cast<int>(std::round((m_logical_height - cur.bottom()) * sy_factor));
++  int sw = static_cast<int>(std::round(cur.width() * sx_factor));
++  int sh = static_cast<int>(std::round(cur.height() * sy_factor));
++
++  glScissor(sx, sy, sw, sh);
+ }
+ 
+ void
+@@ -541,11 +598,15 @@ OpenGLFramebuffer::pop_cliprect()
+   }
+   else
+   {
+-    geom::irect const& rect = cliprect_stack.back();
+-    glScissor(rect.left(),
+-              get_size().height() - rect.bottom(),
+-              rect.width(),
+-              rect.height());
++    geom::irect const& cur = cliprect_stack.back();
++    float sx_factor = (m_logical_width > 0) ? (static_cast<float>(m_physical_width) / static_cast<float>(m_logical_width)) : 1.0f;
++    float sy_factor = (m_logical_height > 0) ? (static_cast<float>(m_physical_height) / static_cast<float>(m_logical_height)) : 1.0f;
++    int sx = static_cast<int>(std::round(cur.left() * sx_factor));
++    int sy = static_cast<int>(std::round((m_logical_height - cur.bottom()) * sy_factor));
++    int sw = static_cast<int>(std::round(cur.width() * sx_factor));
++    int sh = static_cast<int>(std::round(cur.height() * sy_factor));
++
++    glScissor(sx, sy, sw, sh);
+   }
+ }
+ 
+@@ -704,6 +765,8 @@ OpenGLFramebuffer::fill_rect(geom::irect const& rect, Color const& color)
+ geom::isize
+ OpenGLFramebuffer::get_size() const
+ {
++  if (m_logical_width > 0 && m_logical_height > 0)
++    return geom::isize(m_logical_width, m_logical_height);
+   int w = 0;
+   int h = 0;
+   // Prefer drawable size so layout matches the GL viewport/ortho.
+diff --git a/src/engine/display/opengl/opengl_framebuffer.hpp b/src/engine/display/opengl/opengl_framebuffer.hpp
+index e024339..555bc7d 100644
+--- a/src/engine/display/opengl/opengl_framebuffer.hpp
++++ b/src/engine/display/opengl/opengl_framebuffer.hpp
+@@ -30,6 +30,11 @@ private:
+   float m_mvp[16];
+   int m_width;
+   int m_height;
++  int m_physical_width;
++  int m_physical_height;
++  int m_logical_width;
++  int m_logical_height;
++  float m_scale;
+ 
+ #if !PINGUS_GL_ES
+   GLuint m_vao;
+@@ -66,6 +71,9 @@ public:
+   void fill_rect(geom::irect const& rect, Color const& color) override;
+ 
+   geom::isize get_size() const override;
++  int get_physical_width() const override { return m_physical_width > 0 ? m_physical_width : m_width; }
++  int get_physical_height() const override { return m_physical_height > 0 ? m_physical_height : m_height; }
++  void set_scale(float scale) override;
+ 
+ private:
+   OpenGLFramebuffer(OpenGLFramebuffer const&);
+diff --git a/src/engine/input/sdl_driver.cpp b/src/engine/input/sdl_driver.cpp
+index 54d6dc8..69a21ff 100644
+--- a/src/engine/input/sdl_driver.cpp
++++ b/src/engine/input/sdl_driver.cpp
+@@ -16,6 +16,8 @@
+ 
+ #include "engine/input/sdl_driver.hpp"
+ 
++#include "engine/display/display.hpp"
++
+ namespace pingus::input {
+ 
+ SDLDriver::SDLDriver() :
+@@ -224,18 +226,22 @@ SDLDriver::dispatch_event(SDL_Event const& event)
+   switch(event.type)
+   {
+     case SDL_MOUSEMOTION:
+-      for(auto i = pointer_bindings.begin();
+-          i != pointer_bindings.end(); ++i)
+       {
+-        i->binding->set_pos(geom::fpoint(static_cast<float>(event.motion.x),
+-                                         static_cast<float>(event.motion.y)));
+-      }
++        geom::fpoint pos = Display::screen_to_logical(geom::fpoint(static_cast<float>(event.motion.x),
++                                                                  static_cast<float>(event.motion.y)));
++        for(auto i = pointer_bindings.begin();
++            i != pointer_bindings.end(); ++i)
++        {
++          i->binding->set_pos(pos);
++        }
+ 
+-      for(auto i = scroller_bindings.begin();
+-          i != scroller_bindings.end(); ++i)
+-      {
+-        i->binding->set_delta(geom::fpoint(static_cast<float>(event.motion.xrel),
+-                                           static_cast<float>(event.motion.yrel)));
++        geom::fpoint delta = Display::screen_to_logical_delta(geom::fpoint(static_cast<float>(event.motion.xrel),
++                                                                          static_cast<float>(event.motion.yrel)));
++        for(auto i = scroller_bindings.begin();
++            i != scroller_bindings.end(); ++i)
++        {
++          i->binding->set_delta(delta);
++        }
+       }
+       break;
+ 
+@@ -257,6 +263,16 @@ SDLDriver::dispatch_event(SDL_Event const& event)
+ 
+     case SDL_MOUSEBUTTONDOWN:
+     case SDL_MOUSEBUTTONUP:
++      if (event.type == SDL_MOUSEBUTTONDOWN)
++      {
++        geom::fpoint pos = Display::screen_to_logical(geom::fpoint(static_cast<float>(event.button.x),
++                                                                  static_cast<float>(event.button.y)));
++        for(auto i = pointer_bindings.begin();
++            i != pointer_bindings.end(); ++i)
++        {
++          i->binding->set_pos(pos);
++        }
++      }
+       for(auto i = mouse_button_bindings.begin();
+           i != mouse_button_bindings.end(); ++i)
+       {
+diff --git a/src/pingus/config_manager.cpp b/src/pingus/config_manager.cpp
+index 646ad94..e39521b 100644
+--- a/src/pingus/config_manager.cpp
++++ b/src/pingus/config_manager.cpp
+@@ -46,6 +46,7 @@ ConfigManager::ConfigManager() :
+   on_software_cursor_change(),
+   on_auto_scrolling_change(),
+   on_drag_drop_scrolling_change(),
++  on_ui_scale_change(),
+   filename()
+ {
+ }
+@@ -122,6 +123,40 @@ ConfigManager::get_fullscreen_resolution() const
+   return m_opts.fullscreen_resolution.get();
+ }
+ 
++void
++ConfigManager::set_ui_scale(std::string const& scale)
++{
++  log_info("ConfigManager::set_ui_scale: {}", scale);
++  m_opts.ui_scale.set(scale);
++
++  float s = 1.0f;
++  if (scale == "Auto" || scale.empty())
++    s = Display::calc_auto_scale();
++  else if (scale == "1.0x")
++    s = 1.0f;
++  else if (scale == "1.5x")
++    s = 1.5f;
++  else if (scale == "2.0x")
++    s = 2.0f;
++  else if (scale == "2.5x")
++    s = 2.5f;
++  else if (scale == "3.0x")
++    s = 3.0f;
++  else
++    s = std::strtof(scale.c_str(), nullptr);
++
++  Display::set_scale(s);
++  on_ui_scale_change(scale);
++}
++
++std::string
++ConfigManager::get_ui_scale() const
++{
++  if (m_opts.ui_scale.is_set())
++    return m_opts.ui_scale.get();
++  return "Auto";
++}
++
+ void
+ ConfigManager::set_fullscreen(bool v)
+ {
+@@ -304,7 +339,11 @@ ConfigManager::apply(Options const& opts)
+   if (m_opts.framebuffer_type.is_set())
+     set_renderer(m_opts.framebuffer_type.get());
+   else
++#if defined(__EMSCRIPTEN__) || defined(ANDROID) || defined(PINGUS_USE_GLES)
++    set_renderer(FramebufferType::OPENGL);
++#else
+     set_renderer(FramebufferType::SDL);
++#endif
+ 
+   if (opts.master_volume.is_set())
+     set_master_volume(opts.master_volume.get());
+@@ -336,6 +375,11 @@ ConfigManager::apply(Options const& opts)
+   if (opts.auto_scrolling.is_set())
+     set_auto_scrolling(opts.auto_scrolling.get());
+ 
++  if (opts.ui_scale.is_set())
++    set_ui_scale(opts.ui_scale.get());
++  else
++    set_ui_scale("Auto");
++
+   if (opts.language.is_set())
+     set_language(tinygettext::Language::from_env(opts.language.get()));
+ }
+diff --git a/src/pingus/config_manager.hpp b/src/pingus/config_manager.hpp
+index e8e3fb3..82c2ba4 100644
+--- a/src/pingus/config_manager.hpp
++++ b/src/pingus/config_manager.hpp
+@@ -55,6 +55,10 @@ public:
+   Size get_fullscreen_resolution() const;
+   sigc::signal<void(Size)> on_fullscreen_resolution_change;
+ 
++  void set_ui_scale(std::string const& scale);
++  std::string get_ui_scale() const;
++  sigc::signal<void(std::string)> on_ui_scale_change;
++
+   void set_fullscreen(bool);
+   bool get_fullscreen() const;
+   sigc::signal<void(bool)> on_fullscreen_change;
+diff --git a/src/pingus/options.cpp b/src/pingus/options.cpp
+index 4d63a35..78fae63 100644
+--- a/src/pingus/options.cpp
++++ b/src/pingus/options.cpp
+@@ -130,6 +130,11 @@ Options::from_file_reader(ReaderMapping const& reader)
+     opts.drag_drop_scrolling.set(bool_value);
+   }
+ 
++  if (reader.read("ui-scale", string_value))
++  {
++    opts.ui_scale.set(string_value);
++  }
++
+   return opts;
+ }
+ 
+@@ -186,6 +191,9 @@ Options::save(Pathname const& filename) const
+   if (drag_drop_scrolling.is_set())
+     writer.write("drag-drop-scrolling", drag_drop_scrolling.get());
+ 
++  if (ui_scale.is_set())
++    writer.write("ui-scale", ui_scale.get());
++
+   writer.end_object(); // pingus-config
+ 
+   out << std::endl;
+@@ -204,6 +212,7 @@ Options::merge(Options const& rhs)
+   mouse_grab.merge(rhs.mouse_grab);
+   geometry.merge(rhs.geometry);
+   fullscreen_resolution.merge(rhs.fullscreen_resolution);
++  ui_scale.merge(rhs.ui_scale);
+ 
+   // Sound
+   master_volume.merge(rhs.master_volume);
+diff --git a/src/pingus/options.hpp b/src/pingus/options.hpp
+index fb233d8..317d354 100644
+--- a/src/pingus/options.hpp
++++ b/src/pingus/options.hpp
+@@ -81,6 +81,7 @@ struct Options
+   Value<bool> mouse_grab;
+   Value<Size> geometry;
+   Value<Size> fullscreen_resolution;
++  Value<std::string> ui_scale;
+ 
+   // Sound
+   Value<int>  master_volume;
+@@ -113,6 +114,7 @@ struct Options
+     mouse_grab(),
+     geometry(),
+     fullscreen_resolution(),
++    ui_scale(),
+     master_volume(),
+     sound_volume(),
+     music_volume(),
+diff --git a/src/pingus/pingus_main.cpp b/src/pingus/pingus_main.cpp
+index 5d15192..37dbdc1 100644
+--- a/src/pingus/pingus_main.cpp
++++ b/src/pingus/pingus_main.cpp
+@@ -676,10 +676,12 @@ PingusMain::run(int argc, char** argv)
+     // platforms / drivers.
+     fbtype = FramebufferType::OPENGL;
+ #endif
++#if !defined(__EMSCRIPTEN__) && !defined(ANDROID)
+     if (cmd_options.framebuffer_type.is_set())
+     {
+       fbtype = cmd_options.framebuffer_type.get();
+     }
++#endif
+ 
+     bool fullscreen = cmd_options.fullscreen.is_set() ? cmd_options.fullscreen.get() : false;
+     bool resizable  = cmd_options.resizable.is_set()  ? cmd_options.resizable.get()  : true;
+diff --git a/src/pingus/screens/option_menu.cpp b/src/pingus/screens/option_menu.cpp
+index a335033..304875b 100644
+--- a/src/pingus/screens/option_menu.cpp
++++ b/src/pingus/screens/option_menu.cpp
+@@ -143,6 +143,22 @@ OptionMenu::OptionMenu() :
+     default: assert(false && "unknown renderer type");
+   }
+ 
++  auto scale_box = std::make_unique<ChoiceBox>(Rect());
++  scale_box->add_choice("Auto");
++  scale_box->add_choice("1.0x");
++  scale_box->add_choice("1.5x");
++  scale_box->add_choice("2.0x");
++  scale_box->add_choice("2.5x");
++  scale_box->add_choice("3.0x");
++
++  std::string cur_scale = config_manager.get_ui_scale();
++  if (cur_scale == "1.0x") scale_box->set_current_choice(1);
++  else if (cur_scale == "1.5x") scale_box->set_current_choice(2);
++  else if (cur_scale == "2.0x") scale_box->set_current_choice(3);
++  else if (cur_scale == "2.5x") scale_box->set_current_choice(4);
++  else if (cur_scale == "3.0x") scale_box->set_current_choice(5);
++  else scale_box->set_current_choice(0);
++
+   m_language = dictionary_manager.get_language();
+ 
+   auto language_box = std::make_unique<ChoiceBox>(Rect());
+@@ -201,6 +217,7 @@ OptionMenu::OptionMenu() :
+   C(language_box->on_change.connect(std::bind(&OptionMenu::on_language_change, this, std::placeholders::_1)));
+   C(resolution_box->on_change.connect(std::bind(&OptionMenu::on_resolution_change, this, std::placeholders::_1)));
+   C(renderer_box->on_change.connect(std::bind(&OptionMenu::on_renderer_change, this, std::placeholders::_1)));
++  C(scale_box->on_change.connect(std::bind(&OptionMenu::on_scale_change, this, std::placeholders::_1)));
+ 
+   x_pos = 0;
+   y_pos = 0;
+@@ -217,6 +234,7 @@ OptionMenu::OptionMenu() :
+   y_pos = 0;
+   add_item(_("Resolution:"), std::move(resolution_box));
+   add_item(_("Renderer:"), std::move(renderer_box));
++  add_item(_("UI Scale:"), std::move(scale_box));
+   y_pos += 1;
+   add_item(_("Language:"), std::move(language_box));
+   y_pos += 1;
+@@ -290,7 +308,7 @@ OptionMenu::add_item(std::string const& label, std::unique_ptr<pingus::gui::Rect
+     assert(false && "Unhandled control type");
+   }
+ 
+-  options.push_back(Option(label_component.get(), control.get()));
++  options.push_back(Option(label_component.get(), control.get(), x_pos, y_pos));
+ 
+   gui_manager->add(std::move(label_component));
+   gui_manager->add(std::move(control));
+@@ -354,36 +372,39 @@ OptionMenu::on_escape_press()
+ void
+ OptionMenu::resize(Size const& size_)
+ {
+-  Size old_size = size;
+   GUIScreen::resize(size_);
+ 
+   if (ok_button)
+     ok_button->set_pos(size.width()/2 + 245, size.height()/2 + 150);
+-  /*
+-  if (defaults_label)
+-    defaults_label->set_rect(Rect(geom::ipoint(Display::get_width()/2 - 100, Display::get_height()/2 + 160), Size(170, 32)));
+-  if (defaults_box)
+-    defaults_box->set_rect(Rect(geom::ipoint(Display::get_width()/2 - 100 + 170, Display::get_height()/2 + 160), Size(32, 32)));
+-  */
+ 
+   if (options.empty())
+     return;
+ 
+-  // FIXME: this drifts due to rounding errors
+-  int x_diff = (size.width()  - old_size.width()) / 2;
+-  int y_diff = (size.height() - old_size.height()) / 2;
++  int x_offset = size.width()/2 - 320;
++  int y_offset = size.height()/2 - 240;
+ 
+-  Rect rect;
+-  for(std::vector<Option>::iterator i = options.begin(); i != options.end(); ++i)
++  for (auto& opt : options)
+   {
+-    if ((*i).label)
++    Rect rect(Vector2i(80 + x_offset + opt.col * 320,
++                       140 + y_offset + opt.row * 32),
++              Size(320, 32));
++    Rect left(rect.left(), rect.top(),
++              rect.right() - 180, rect.bottom());
++    Rect right(rect.left() + 140, rect.top(),
++               rect.right(), rect.bottom());
++
++    if (dynamic_cast<CheckBox*>(opt.control))
+     {
+-      rect = (*i).label->get_rect();
+-      (*i).label->set_rect(Rect(geom::ipoint(rect.left() + x_diff, rect.top() + y_diff), rect.size()));
++      opt.control->set_rect(Rect(geom::ipoint(rect.left(), rect.top()), Size(32, 32)));
++      if (opt.label)
++        opt.label->set_rect(Rect(rect.left() + 40, rect.top(), rect.right(), rect.bottom()));
++    }
++    else
++    {
++      if (opt.label)
++        opt.label->set_rect(left);
++      opt.control->set_rect(right);
+     }
+-
+-    rect = (*i).control->get_rect();
+-    (*i).control->set_rect(Rect(geom::ipoint(rect.left() + x_diff, rect.top() + y_diff), rect.size()));
+   }
+ }
+ 
+@@ -482,6 +503,12 @@ OptionMenu::on_renderer_change(std::string const& str)
+   config_manager.set_renderer(FramebufferType_from_string(str));
+ }
+ 
++void
++OptionMenu::on_scale_change(std::string const& str)
++{
++  config_manager.set_ui_scale(str);
++}
++
+ } // namespace pingus
+ 
+ /* EOF */
+diff --git a/src/pingus/screens/option_menu.hpp b/src/pingus/screens/option_menu.hpp
+index e6b2e4a..5716fb7 100644
+--- a/src/pingus/screens/option_menu.hpp
++++ b/src/pingus/screens/option_menu.hpp
+@@ -45,9 +45,11 @@ private:
+   struct Option {
+     Label*         label;
+     pingus::gui::RectComponent* control;
++    int col;
++    int row;
+ 
+-    Option(Label* label_, pingus::gui::RectComponent* control_) :
+-      label(label_), control(control_)
++    Option(Label* label_, pingus::gui::RectComponent* control_, int col_, int row_) :
++      label(label_), control(control_), col(col_), row(row_)
+     {}
+   };
+ 
+@@ -101,6 +103,7 @@ public:
+   void on_language_change(std::string const& str);
+   void on_resolution_change(std::string const& str);
+   void on_renderer_change(std::string const& str);
++  void on_scale_change(std::string const& str);
+ 
+   void save_language();
+ 

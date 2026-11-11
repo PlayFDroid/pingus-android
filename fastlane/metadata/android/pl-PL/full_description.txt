@@ -1,0 +1,12 @@
+Pingus to klasyczna, otwartoźródłowa gra logiczno-zręcznościowa w stylu Lemmings z udziałem pingwinów.
+
+Zarządzaj grupą maszerujących pingwinów i przeprowadzaj je przez najeżone niebezpieczeństwami poziomy, przydzielając poszczególnym osobnikom unikalne umiejętności: kopanie, budowanie mostów, wspinaczkę, szybowanie, blokowanie i rozbijanie przeszkód!
+
+Cechy tego zmodernizowanego wydania na Androida:
+• Kompletna klasyczna kampania z dziesiątkami poziomów samouczka, poziomami świątecznymi i zaawansowanymi wyzwaniami w zróżnicowanych biomach.
+• Sterowanie dostosowane do ekranów dotykowych: przeciągaj palcem po planszy, aby swobodnie przesuwać widok, i dotykaj pingwinów bezpośrednio, aby wydawać im polecenia.
+• Automatyczne skalowanie interfejsu (Auto-Scaling): interfejs, napisy i obiekty gry są odpowiednio przeskalowane i czytelne na współczesnych ekranach o wysokim zagęszczeniu pikseli (z możliwością wyboru skali w menu Opcji).
+• Pełne udźwiękowienie: autentyczne efekty dźwiękowe oraz trackerowa muzyka modułowa (.it) generowane przez OpenAL Soft i libmodplug.
+• Nowoczesny zestaw narzędzi skierowany na Androida 15/16+ (SDK 35) z obsługą 64-bitowych procesorów (arm64-v8a i x86_64) oraz wyrównaniem do 16 KB stron pamięci.
+• Wbudowany edytor poziomów oraz obsługa dodatkowych zestawów map społeczności.
+• W 100% wolne i otwarte oprogramowanie na licencji GPL-3.0+, bez reklam i telemetrii.

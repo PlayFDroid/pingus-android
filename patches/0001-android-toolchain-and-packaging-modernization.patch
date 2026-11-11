@@ -1,0 +1,84 @@
+diff --git a/mk/android/app/AndroidManifest.xml b/mk/android/app/AndroidManifest.xml
+index c0c1e3f..7573537 100644
+--- a/mk/android/app/AndroidManifest.xml
++++ b/mk/android/app/AndroidManifest.xml
+@@ -4,7 +4,7 @@
+     android:versionCode="1"
+     android:versionName="0.8.0">
+ 
+-    <uses-sdk android:minSdkVersion="22" android:targetSdkVersion="22" />
++    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35" />
+ 
+     <!-- GLES2 is the default renderer. ES 2.0 is required by Android CDD; minSdk 22 is fine. -->
+     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
+diff --git a/mk/android/app/jni/Android.mk b/mk/android/app/jni/Android.mk
+index 2e33e71..88fbff9 100644
+--- a/mk/android/app/jni/Android.mk
++++ b/mk/android/app/jni/Android.mk
+@@ -87,8 +87,8 @@ LOCAL_CFLAGS += -DUSE_SDL2 -DANDROID -DPINGUS_NO_SOUND=1 -DPINGUS_USE_GLES=1
+ LOCAL_CPPFLAGS += -DUSE_SDL2 -DANDROID -DPINGUS_NO_SOUND=1 -DPINGUS_USE_GLES=1 -std=c++23 -D_LIBCPP_ENABLE_EXPERIMENTAL=1
+ endif
+ 
+-# ndk-build skips sexpcpp's CMake checks; NDK 29's libc++ has float charconv
+-SEXP_CHARCONV := -DSEXP_HAVE_FROM_CHARS_FLOAT=1 -DSEXP_HAVE_TO_CHARS_FLOAT=1
++# ndk-build skips sexpcpp's CMake checks; NDK 28 libc++ does not have float from_chars
++SEXP_CHARCONV :=
+ LOCAL_CFLAGS += -DPRIO_USE_SEXPCPP=1 $(SEXP_CHARCONV) -DTINYGETTEXT_UTF8_ONLY=1
+ LOCAL_CPPFLAGS += -DPRIO_USE_SEXPCPP=1 $(SEXP_CHARCONV) -DTINYGETTEXT_UTF8_ONLY=1
+ ifndef PINGUS_VERSION
+@@ -100,5 +100,6 @@ LOCAL_CFLAGS += -DPINGUS_DEFAULT_DATADIR=\"\" -DDATA_PREFIX=\"\"
+ LOCAL_CPPFLAGS += -DPINGUS_DEFAULT_DATADIR=\"\" -DDATA_PREFIX=\"\"
+ 
+ LOCAL_CPP_FEATURES := exceptions rtti
++LOCAL_LDFLAGS += -Wl,-z,max-page-size=16384
+ 
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/mk/android/scripts/build-apk.sh b/mk/android/scripts/build-apk.sh
+index b795062..233e152 100644
+--- a/mk/android/scripts/build-apk.sh
++++ b/mk/android/scripts/build-apk.sh
+@@ -66,7 +66,7 @@ cp "$APPLICATION_MK" src/jni/Application.mk
+ cp "$TOP_ANDROID_MK" src/jni/Android.mk
+ cp "$APP_DIR/jni/Android.mk" src/jni/src/Android.mk
+ cp "$APP_DIR/AndroidManifest.xml" src/AndroidManifest.xml
+-cp -r "$APP_DIR/res" src/res
++cp -r "$APP_DIR/res"/. src/res/
+ 
+ # Game C++ sources next to the module Android.mk.
+ cp -r "$GAME_SRC_DIR"/. src/jni/src/
+@@ -315,7 +315,7 @@ echo "APK contents (assets sample):"
+ #  exit 1
+ #fi
+ 
+-"$BT/zipalign" -f 4 out/base.apk out/aligned.apk
++"$BT/zipalign" -f -P 16 4 out/base.apk out/aligned.apk
+ 
+ "$BT/apksigner" sign \
+   --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
+diff --git a/mk/android/scripts/build-audio-libs.sh b/mk/android/scripts/build-audio-libs.sh
+index 3e823d3..e4f3ab7 100755
+--- a/mk/android/scripts/build-audio-libs.sh
++++ b/mk/android/scripts/build-audio-libs.sh
+@@ -107,7 +107,7 @@ file(GLOB MODPLUG_SRC_FILES "${MODPLUG_SRC}/src/*.cpp" "${MODPLUG_SRC}/src/*.c")
+ add_library(modplug STATIC \${MODPLUG_SRC_FILES})
+ target_include_directories(modplug PUBLIC "${MODPLUG_SRC}/src" "${MODPLUG_SRC}/src/libmodplug")
+ target_compile_definitions(modplug PRIVATE MODPLUG_STATIC HAVE_STDINT_H HAVE_SINF HAVE_SETENV)
+-# libmodplug 0.8.9 still uses the C++ `register` keyword; NDK defaults to
++# libmodplug 0.8.9 still uses the C++ register keyword; NDK defaults to
+ # C++17 where that is an error (same fix as wasm emconfigure CXXFLAGS).
+ set_target_properties(modplug PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS ON)
+ target_compile_options(modplug PRIVATE -std=gnu++14 -Wno-register -Wno-deprecated-register)
+diff --git a/mk/android/scripts/build-sdl-libs.sh b/mk/android/scripts/build-sdl-libs.sh
+index db8caed..4bf8914 100644
+--- a/mk/android/scripts/build-sdl-libs.sh
++++ b/mk/android/scripts/build-sdl-libs.sh
+@@ -160,7 +160,8 @@ XMPMK
+ fi
+ 
+ mkdir -p javasrc
+-cp -r sdl-jni/SDL/android-project/app/src/main/java/org javasrc/org
++rm -rf javasrc/org
++cp -r sdl-jni/SDL/android-project/app/src/main/java/org javasrc/
+ chmod -R u+w javasrc
+ 
+ mkdir -p classes
