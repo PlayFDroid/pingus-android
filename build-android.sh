@@ -118,6 +118,12 @@ if [ -d "${SCRIPT_DIR}/res" ]; then
   cp -a "${SCRIPT_DIR}/res"/mipmap-* "${SRC_DIR}/mk/android/app/res/"
 fi
 
+if [ -d "${SCRIPT_DIR}/java" ]; then
+  echo "==> Staging custom Java activity..."
+  mkdir -p "${SRC_DIR}/mk/android/app/java"
+  cp -a "${SCRIPT_DIR}/java"/* "${SRC_DIR}/mk/android/app/java/"
+fi
+
 # ------------------------------------------------------------------------------
 # 3. Download & Stage Dependencies
 # ------------------------------------------------------------------------------
@@ -215,6 +221,7 @@ echo "==> Building SDL2 libraries for ${TARGET_ABIS}..."
   export SDL_SRC="${DEPS_DIR}/SDL2-${SDL_VERSION}"
   export APPLICATION_MK="${SDL_BUILD_DIR}/Application.mk"
   export TOP_ANDROID_MK="${SDL_BUILD_DIR}/Android.mk"
+  export APP_JAVA_DIR="${SRC_DIR}/mk/android/app/java"
   export NIX_BUILD_CORES="$(nproc)"
 
   bash "${SRC_DIR}/mk/android/scripts/build-sdl-libs.sh"

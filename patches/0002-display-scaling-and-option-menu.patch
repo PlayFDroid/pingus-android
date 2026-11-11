@@ -139,7 +139,7 @@ index 8804ce6..dc23a3a 100644
  
  } // namespace pingus
 diff --git a/src/engine/display/opengl/opengl_framebuffer.cpp b/src/engine/display/opengl/opengl_framebuffer.cpp
-index 307f93f..5d5334d 100644
+index 307f93f..70725e4 100644
 --- a/src/engine/display/opengl/opengl_framebuffer.cpp
 +++ b/src/engine/display/opengl/opengl_framebuffer.cpp
 @@ -19,7 +19,11 @@
@@ -258,7 +258,23 @@ index 307f93f..5d5334d 100644
        op[y * pitch + 4 * x + 0] = buffer[si + 0];
        op[y * pitch + 4 * x + 1] = buffer[si + 1];
        op[y * pitch + 4 * x + 2] = buffer[si + 2];
-@@ -525,10 +577,15 @@ OpenGLFramebuffer::push_cliprect(geom::irect const& rect)
+@@ -504,6 +556,15 @@ OpenGLFramebuffer::is_resizable() const
+ void
+ OpenGLFramebuffer::flip()
+ {
++#ifdef ANDROID
++  if (m_window && m_glcontext)
++  {
++    if (SDL_GL_GetCurrentContext() != m_glcontext)
++    {
++      SDL_GL_MakeCurrent(m_window, m_glcontext);
++    }
++  }
++#endif
+   SDL_GL_SwapWindow(m_window);
+ }
+ 
+@@ -525,10 +586,15 @@ OpenGLFramebuffer::push_cliprect(geom::irect const& rect)
                                    std::min(cliprect_stack.back().bottom(), rect.bottom())));
    }
  
@@ -278,7 +294,7 @@ index 307f93f..5d5334d 100644
  }
  
  void
-@@ -541,11 +598,15 @@ OpenGLFramebuffer::pop_cliprect()
+@@ -541,11 +607,15 @@ OpenGLFramebuffer::pop_cliprect()
    }
    else
    {
@@ -299,7 +315,7 @@ index 307f93f..5d5334d 100644
    }
  }
  
-@@ -704,6 +765,8 @@ OpenGLFramebuffer::fill_rect(geom::irect const& rect, Color const& color)
+@@ -704,6 +774,8 @@ OpenGLFramebuffer::fill_rect(geom::irect const& rect, Color const& color)
  geom::isize
  OpenGLFramebuffer::get_size() const
  {

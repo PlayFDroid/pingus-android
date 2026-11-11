@@ -1,18 +1,27 @@
 diff --git a/mk/android/app/AndroidManifest.xml b/mk/android/app/AndroidManifest.xml
-index c0c1e3f..ed854c0 100644
+index c0c1e3f..70ba260 100644
 --- a/mk/android/app/AndroidManifest.xml
 +++ b/mk/android/app/AndroidManifest.xml
-@@ -4,7 +4,7 @@
-     android:versionCode="1"
-     android:versionName="0.8.0">
+@@ -1,10 +1,10 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+     package="org.pingus.game"
+-    android:versionCode="1"
+-    android:versionName="0.8.0">
++    android:versionCode="2"
++    android:versionName="0.8.0-android2">
  
 -    <uses-sdk android:minSdkVersion="22" android:targetSdkVersion="22" />
 +    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35" />
  
      <!-- GLES2 is the default renderer. ES 2.0 is required by Android CDD; minSdk 22 is fine. -->
      <uses-feature android:glEsVersion="0x00020000" android:required="true" />
-@@ -27,8 +27,8 @@
-             android:name="org.libsdl.app.SDLActivity"
+@@ -24,11 +24,11 @@
+           exported is required for the MAIN/LAUNCHER filter on newer platforms.
+         -->
+         <activity
+-            android:name="org.libsdl.app.SDLActivity"
++            android:name="org.pingus.game.MainActivity"
              android:label="Pingus"
              android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
 -            android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|uiMode"
@@ -80,16 +89,19 @@ index 3e823d3..e4f3ab7 100755
  set_target_properties(modplug PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS ON)
  target_compile_options(modplug PRIVATE -std=gnu++14 -Wno-register -Wno-deprecated-register)
 diff --git a/mk/android/scripts/build-sdl-libs.sh b/mk/android/scripts/build-sdl-libs.sh
-index db8caed..4bf8914 100644
+index db8caed..8ff073b 100644
 --- a/mk/android/scripts/build-sdl-libs.sh
 +++ b/mk/android/scripts/build-sdl-libs.sh
-@@ -160,7 +160,8 @@ XMPMK
+@@ -160,7 +160,11 @@ XMPMK
  fi
  
  mkdir -p javasrc
 -cp -r sdl-jni/SDL/android-project/app/src/main/java/org javasrc/org
 +rm -rf javasrc/org
 +cp -r sdl-jni/SDL/android-project/app/src/main/java/org javasrc/
++if [ -n "${APP_JAVA_DIR:-}" ] && [ -d "$APP_JAVA_DIR" ]; then
++  cp -r "$APP_JAVA_DIR"/* javasrc/
++fi
  chmod -R u+w javasrc
  
  mkdir -p classes
