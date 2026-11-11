@@ -252,7 +252,7 @@ LOCAL_SRC_FILES := ${SDL_OUT_DIR}/lib/\$(TARGET_ARCH_ABI)/libSDL2.so
 include \$(PREBUILT_SHARED_LIBRARY)
 EOF
 
-KEYSTORE="${KEYSTORE_FILE:-${SRC_DIR}/mk/android/keystore/debug.keystore}"
+KEYSTORE="${SRC_DIR}/mk/android/keystore/debug.keystore"
 
 echo "==> Compiling Pingus engine and packaging APK..."
 (
