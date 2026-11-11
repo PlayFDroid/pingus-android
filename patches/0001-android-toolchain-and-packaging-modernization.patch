@@ -1,5 +1,5 @@
 diff --git a/mk/android/app/AndroidManifest.xml b/mk/android/app/AndroidManifest.xml
-index c0c1e3f..7573537 100644
+index c0c1e3f..ed854c0 100644
 --- a/mk/android/app/AndroidManifest.xml
 +++ b/mk/android/app/AndroidManifest.xml
 @@ -4,7 +4,7 @@
@@ -11,6 +11,17 @@ index c0c1e3f..7573537 100644
  
      <!-- GLES2 is the default renderer. ES 2.0 is required by Android CDD; minSdk 22 is fine. -->
      <uses-feature android:glEsVersion="0x00020000" android:required="true" />
+@@ -27,8 +27,8 @@
+             android:name="org.libsdl.app.SDLActivity"
+             android:label="Pingus"
+             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+-            android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|uiMode"
+-            android:screenOrientation="landscape"
++            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection"
++            android:screenOrientation="sensorLandscape"
+             android:launchMode="singleTask"
+             android:alwaysRetainTaskState="true"
+             android:exported="true">
 diff --git a/mk/android/app/jni/Android.mk b/mk/android/app/jni/Android.mk
 index 2e33e71..88fbff9 100644
 --- a/mk/android/app/jni/Android.mk
@@ -33,6 +44,21 @@ index 2e33e71..88fbff9 100644
 +LOCAL_LDFLAGS += -Wl,-z,max-page-size=16384
  
  include $(BUILD_SHARED_LIBRARY)
+diff --git a/mk/android/app/res/mipmap-hdpi/ic_launcher.png b/mk/android/app/res/mipmap-hdpi/ic_launcher.png
+index fb6ffb9..4612cce 100644
+Binary files a/mk/android/app/res/mipmap-hdpi/ic_launcher.png and b/mk/android/app/res/mipmap-hdpi/ic_launcher.png differ
+diff --git a/mk/android/app/res/mipmap-mdpi/ic_launcher.png b/mk/android/app/res/mipmap-mdpi/ic_launcher.png
+index fc8a1de..be8d2c9 100644
+Binary files a/mk/android/app/res/mipmap-mdpi/ic_launcher.png and b/mk/android/app/res/mipmap-mdpi/ic_launcher.png differ
+diff --git a/mk/android/app/res/mipmap-xhdpi/ic_launcher.png b/mk/android/app/res/mipmap-xhdpi/ic_launcher.png
+index 065ddbc..e374182 100644
+Binary files a/mk/android/app/res/mipmap-xhdpi/ic_launcher.png and b/mk/android/app/res/mipmap-xhdpi/ic_launcher.png differ
+diff --git a/mk/android/app/res/mipmap-xxhdpi/ic_launcher.png b/mk/android/app/res/mipmap-xxhdpi/ic_launcher.png
+index 17fddff..6f601b6 100644
+Binary files a/mk/android/app/res/mipmap-xxhdpi/ic_launcher.png and b/mk/android/app/res/mipmap-xxhdpi/ic_launcher.png differ
+diff --git a/mk/android/app/res/mipmap-xxxhdpi/ic_launcher.png b/mk/android/app/res/mipmap-xxxhdpi/ic_launcher.png
+index 8cd72a8..e812072 100644
+Binary files a/mk/android/app/res/mipmap-xxxhdpi/ic_launcher.png and b/mk/android/app/res/mipmap-xxxhdpi/ic_launcher.png differ
 diff --git a/mk/android/scripts/build-apk.sh b/mk/android/scripts/build-apk.sh
 index b795062..233e152 100644
 --- a/mk/android/scripts/build-apk.sh

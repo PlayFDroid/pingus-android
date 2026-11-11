@@ -398,7 +398,7 @@ index 54d6dc8..69a21ff 100644
            i != mouse_button_bindings.end(); ++i)
        {
 diff --git a/src/pingus/config_manager.cpp b/src/pingus/config_manager.cpp
-index 646ad94..e39521b 100644
+index 646ad94..58b6f99 100644
 --- a/src/pingus/config_manager.cpp
 +++ b/src/pingus/config_manager.cpp
 @@ -46,6 +46,7 @@ ConfigManager::ConfigManager() :
@@ -450,13 +450,16 @@ index 646ad94..e39521b 100644
  void
  ConfigManager::set_fullscreen(bool v)
  {
-@@ -304,7 +339,11 @@ ConfigManager::apply(Options const& opts)
+@@ -301,10 +336,14 @@ ConfigManager::apply(Options const& opts)
+ {
+   m_opts.merge(opts);
+ 
++#if defined(__EMSCRIPTEN__) || defined(ANDROID) || defined(PINGUS_USE_GLES)
++  set_renderer(FramebufferType::OPENGL);
++#else
    if (m_opts.framebuffer_type.is_set())
      set_renderer(m_opts.framebuffer_type.get());
    else
-+#if defined(__EMSCRIPTEN__) || defined(ANDROID) || defined(PINGUS_USE_GLES)
-+    set_renderer(FramebufferType::OPENGL);
-+#else
      set_renderer(FramebufferType::SDL);
 +#endif
  
@@ -561,13 +564,26 @@ index 5d15192..37dbdc1 100644
      bool fullscreen = cmd_options.fullscreen.is_set() ? cmd_options.fullscreen.get() : false;
      bool resizable  = cmd_options.resizable.is_set()  ? cmd_options.resizable.get()  : true;
 diff --git a/src/pingus/screens/option_menu.cpp b/src/pingus/screens/option_menu.cpp
-index a335033..304875b 100644
+index a335033..9b945f4 100644
 --- a/src/pingus/screens/option_menu.cpp
 +++ b/src/pingus/screens/option_menu.cpp
-@@ -143,6 +143,22 @@ OptionMenu::OptionMenu() :
-     default: assert(false && "unknown renderer type");
+@@ -133,6 +133,7 @@ OptionMenu::OptionMenu() :
    }
  
+   auto renderer_box = std::make_unique<ChoiceBox>(Rect());
++#if !defined(__EMSCRIPTEN__) && !defined(ANDROID) && !defined(PINGUS_USE_GLES)
+   renderer_box->add_choice("sdl");
+   renderer_box->add_choice("opengl");
+ 
+@@ -142,6 +143,26 @@ OptionMenu::OptionMenu() :
+     case FramebufferType::OPENGL: renderer_box->set_current_choice(1); break;
+     default: assert(false && "unknown renderer type");
+   }
++#else
++  renderer_box->add_choice("opengl");
++  renderer_box->set_current_choice(0);
++#endif
++
 +  auto scale_box = std::make_unique<ChoiceBox>(Rect());
 +  scale_box->add_choice("Auto");
 +  scale_box->add_choice("1.0x");
@@ -583,11 +599,10 @@ index a335033..304875b 100644
 +  else if (cur_scale == "2.5x") scale_box->set_current_choice(4);
 +  else if (cur_scale == "3.0x") scale_box->set_current_choice(5);
 +  else scale_box->set_current_choice(0);
-+
+ 
    m_language = dictionary_manager.get_language();
  
-   auto language_box = std::make_unique<ChoiceBox>(Rect());
-@@ -201,6 +217,7 @@ OptionMenu::OptionMenu() :
+@@ -201,6 +222,7 @@ OptionMenu::OptionMenu() :
    C(language_box->on_change.connect(std::bind(&OptionMenu::on_language_change, this, std::placeholders::_1)));
    C(resolution_box->on_change.connect(std::bind(&OptionMenu::on_resolution_change, this, std::placeholders::_1)));
    C(renderer_box->on_change.connect(std::bind(&OptionMenu::on_renderer_change, this, std::placeholders::_1)));
@@ -595,7 +610,7 @@ index a335033..304875b 100644
  
    x_pos = 0;
    y_pos = 0;
-@@ -217,6 +234,7 @@ OptionMenu::OptionMenu() :
+@@ -217,6 +239,7 @@ OptionMenu::OptionMenu() :
    y_pos = 0;
    add_item(_("Resolution:"), std::move(resolution_box));
    add_item(_("Renderer:"), std::move(renderer_box));
@@ -603,7 +618,7 @@ index a335033..304875b 100644
    y_pos += 1;
    add_item(_("Language:"), std::move(language_box));
    y_pos += 1;
-@@ -290,7 +308,7 @@ OptionMenu::add_item(std::string const& label, std::unique_ptr<pingus::gui::Rect
+@@ -290,7 +313,7 @@ OptionMenu::add_item(std::string const& label, std::unique_ptr<pingus::gui::Rect
      assert(false && "Unhandled control type");
    }
  
@@ -612,7 +627,7 @@ index a335033..304875b 100644
  
    gui_manager->add(std::move(label_component));
    gui_manager->add(std::move(control));
-@@ -354,36 +372,39 @@ OptionMenu::on_escape_press()
+@@ -354,36 +377,39 @@ OptionMenu::on_escape_press()
  void
  OptionMenu::resize(Size const& size_)
  {
@@ -670,19 +685,25 @@ index a335033..304875b 100644
    }
  }
  
-@@ -482,6 +503,12 @@ OptionMenu::on_renderer_change(std::string const& str)
+@@ -479,7 +505,18 @@ OptionMenu::on_resolution_change(std::string const& str)
+ void
+ OptionMenu::on_renderer_change(std::string const& str)
+ {
++#if !defined(__EMSCRIPTEN__) && !defined(ANDROID) && !defined(PINGUS_USE_GLES)
    config_manager.set_renderer(FramebufferType_from_string(str));
- }
- 
++#else
++  (void)str;
++  config_manager.set_renderer(FramebufferType::OPENGL);
++#endif
++}
++
 +void
 +OptionMenu::on_scale_change(std::string const& str)
 +{
 +  config_manager.set_ui_scale(str);
-+}
-+
- } // namespace pingus
+ }
  
- /* EOF */
+ } // namespace pingus
 diff --git a/src/pingus/screens/option_menu.hpp b/src/pingus/screens/option_menu.hpp
 index e6b2e4a..5716fb7 100644
 --- a/src/pingus/screens/option_menu.hpp
