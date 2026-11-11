@@ -113,6 +113,11 @@ echo "==> Applying PlayFDroid modernization & UI scaling patches..."
   done
 )
 
+if [ -d "${SCRIPT_DIR}/res" ]; then
+  echo "==> Staging classic Pingus launcher icons..."
+  cp -a "${SCRIPT_DIR}/res"/mipmap-* "${SRC_DIR}/mk/android/app/res/"
+fi
+
 # ------------------------------------------------------------------------------
 # 3. Download & Stage Dependencies
 # ------------------------------------------------------------------------------

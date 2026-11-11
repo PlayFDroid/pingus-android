@@ -44,21 +44,6 @@ index 2e33e71..88fbff9 100644
 +LOCAL_LDFLAGS += -Wl,-z,max-page-size=16384
  
  include $(BUILD_SHARED_LIBRARY)
-diff --git a/mk/android/app/res/mipmap-hdpi/ic_launcher.png b/mk/android/app/res/mipmap-hdpi/ic_launcher.png
-index fb6ffb9..4612cce 100644
-Binary files a/mk/android/app/res/mipmap-hdpi/ic_launcher.png and b/mk/android/app/res/mipmap-hdpi/ic_launcher.png differ
-diff --git a/mk/android/app/res/mipmap-mdpi/ic_launcher.png b/mk/android/app/res/mipmap-mdpi/ic_launcher.png
-index fc8a1de..be8d2c9 100644
-Binary files a/mk/android/app/res/mipmap-mdpi/ic_launcher.png and b/mk/android/app/res/mipmap-mdpi/ic_launcher.png differ
-diff --git a/mk/android/app/res/mipmap-xhdpi/ic_launcher.png b/mk/android/app/res/mipmap-xhdpi/ic_launcher.png
-index 065ddbc..e374182 100644
-Binary files a/mk/android/app/res/mipmap-xhdpi/ic_launcher.png and b/mk/android/app/res/mipmap-xhdpi/ic_launcher.png differ
-diff --git a/mk/android/app/res/mipmap-xxhdpi/ic_launcher.png b/mk/android/app/res/mipmap-xxhdpi/ic_launcher.png
-index 17fddff..6f601b6 100644
-Binary files a/mk/android/app/res/mipmap-xxhdpi/ic_launcher.png and b/mk/android/app/res/mipmap-xxhdpi/ic_launcher.png differ
-diff --git a/mk/android/app/res/mipmap-xxxhdpi/ic_launcher.png b/mk/android/app/res/mipmap-xxxhdpi/ic_launcher.png
-index 8cd72a8..e812072 100644
-Binary files a/mk/android/app/res/mipmap-xxxhdpi/ic_launcher.png and b/mk/android/app/res/mipmap-xxxhdpi/ic_launcher.png differ
 diff --git a/mk/android/scripts/build-apk.sh b/mk/android/scripts/build-apk.sh
 index b795062..233e152 100644
 --- a/mk/android/scripts/build-apk.sh
